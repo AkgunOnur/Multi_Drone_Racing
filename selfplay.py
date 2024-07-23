@@ -33,9 +33,6 @@ from common.callbacks_updated import EvalCallback, StopTrainingOnRewardThreshold
 from common.evaluation import evaluate_policy
 from common.monitor import Monitor
 from common.vec_env.vec_monitor import VecMonitor
-
-from envs.MultiGates_SelfPlay_v0 import MultiGates_v0
-from envs.MultiGates_SelfPlay_v1 import MultiGates_v1
 from envs.MultiGates_SelfPlay_v2 import MultiGates_v2
 from utils.utils import sync, str2bool
 from utils.enums import ObservationType, ActionType
