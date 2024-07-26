@@ -78,6 +78,7 @@ def evaluate_policy(
     episode_rewards = []
     episode_dumb_rewards = []
     episode_lengths = []
+    info_list = []
 
     episode_counts = np.zeros(n_envs, dtype="int")
     # Divides episodes among different sub environments in the vector as evenly as possible
@@ -155,6 +156,7 @@ def evaluate_policy(
                         episode_rewards.append(current_rewards[i])
                         episode_dumb_rewards.append(current_dumb_rewards[i])
                         episode_lengths.append(current_lengths[i])
+                        info_list.append(infos[i])
                         episode_counts[i] += 1
                     current_rewards[i] = 0
                     current_lengths[i] = 0
@@ -163,6 +165,8 @@ def evaluate_policy(
         observations = new_agent_state
         dumb_observations = new_dumb_agent_state
 
+        # m_rew = np.mean(episode_rewards)
+        # print (f"Episode: {episode_counts[0]} Reward: {m_rew:.2f}")
         if render:
             env.render()
 
@@ -175,13 +179,13 @@ def evaluate_policy(
         assert mean_reward > reward_threshold, "Mean reward below threshold: " f"{mean_reward:.2f} < {reward_threshold:.2f}"
     if return_episode_rewards:
         if opponent_policy != None:
-            return episode_rewards, episode_dumb_rewards, episode_lengths
-        return episode_rewards, episode_lengths
+            return episode_rewards, episode_dumb_rewards, episode_lengths, info_list
+        return episode_rewards, episode_lengths, info_list
     
     if opponent_policy != None:
-        return mean_reward, std_reward, mean_dumb_reward, std_dumb_reward
+        return mean_reward, std_reward, mean_dumb_reward, std_dumb_reward, info_list
     else:
-        return mean_reward, std_reward
+        return mean_reward, std_reward, info_list
 
 
 

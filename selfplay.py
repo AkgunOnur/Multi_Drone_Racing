@@ -19,20 +19,15 @@ import os
 import time
 from datetime import datetime
 import argparse
-import gymnasium as gym
-import numpy as np
-import torch as th
-
 
 from train_ppo import PPO
 from train_td3 import TD3
 from train_ddpg import DDPG
 from train_sac import SAC
 from common.env_util import make_vec_env
-from common.callbacks_updated import EvalCallback, StopTrainingOnRewardThreshold
+from common.callbacks_updated import EvalCallback
 from common.evaluation import evaluate_policy
 from common.monitor import Monitor
-from common.vec_env.vec_monitor import VecMonitor
 from envs.MultiGates_SelfPlay_v2 import MultiGates_v2
 from utils.utils import sync, str2bool
 from utils.enums import ObservationType, ActionType
@@ -44,13 +39,13 @@ DEFAULT_OUTPUT_FOLDER = 'results'
 DEFAULT_OBS = ObservationType('kin') # 'kin' or 'rgb'
 DEFAULT_ACT = ActionType('pos') # 'rpm' or 'pid' or 'vel' or 'one_d_rpm' or 'one_d_pid'
 ALGO = PPO
-DISCRETE_ACTION = True
+DISCRETE_ACTION = False
 ENV_NAME = MultiGates_v2
 N_ENVS = 4
-MAX_TIMESTEPS = 8000
+MAX_TIMESTEPS = 200
 ITER = 1
-EVAL_FREQ = int(8000)
-TRACK = 0
+EVAL_FREQ = int(100)
+TRACK = 1
 
 
 def get_unique_filename(base_filename):
@@ -76,11 +71,11 @@ def run(output_folder=DEFAULT_OUTPUT_FOLDER, gui=DEFAULT_GUI, record_video=DEFAU
 
     N_drones = [2, 2, 2]
     N_dumb_drones = [0, 1, 2]
-    timesteps = [1e5, 1e6, 5e6]
-    # previous_load_folder = algo_name +  "/16Jul_agent_2_dumb_agent_2_update_level_2_ppo_pos_discrete_iter_0"
+    timesteps = [1e5, 1e6, 1e7]
+    # previous_load_folder = "23Jul_agent_2_dumb_agent_1_track_1_ppo_pos_discrete_iter_"
     previous_load_folder = ""
 
-    for train_index in range(0, len(N_drones)):
+    for train_index in range(2, len(N_drones)):
 
         NUM_DRONES = N_drones[train_index]
         NUM_DUMB_DRONES = N_dumb_drones[train_index]
@@ -152,7 +147,11 @@ def run(output_folder=DEFAULT_OUTPUT_FOLDER, gui=DEFAULT_GUI, record_video=DEFAU
                 # agent.actor_target.load_state_dict(loaded_model.actor_target.state_dict())
                 # agent.critic_target.load_state_dict(loaded_model.critic_target.state_dict())
                 
-                print(f"Loaded previous model from: {model_to_be_loaded}")
+                print(f"Loaded previous model from: {model_to_be_loaded} \n")
+
+            else:
+                print(f"No file found! ", model_to_be_loaded, "\n")
+                
                 
             
             eval_callback = EvalCallback(eval_env,

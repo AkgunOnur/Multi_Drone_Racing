@@ -19,43 +19,33 @@ import os
 import time
 from datetime import datetime
 import argparse
-import gymnasium as gym
-import numpy as np
-import torch
-
 from train_ppo import PPO
 from common.env_util import make_vec_env
 from common.callbacks_updated import EvalCallback, StopTrainingOnRewardThreshold
 from common.evaluation import evaluate_policy
 from common.monitor import Monitor
-from common.vec_env.vec_monitor import VecMonitor
-import torch as th
 
-import sys
-sys.path.append('/home/onur/Downloads/MultiDrone/gym_drones')
-sys.path.append('/home/onur/Downloads/MultiDrone/sb3_selfplay')
-
-
-from gym_pybullet_drones.envs.MultiGates_SB import MultiGates
-from envs.MultiGates_SelfPlay_v0 import MultiGates_v0
-from envs.MultiGates_SelfPlay_v1 import MultiGates_v1
-# from gym_pybullet_drones.envs.MultiGatesCont import MultiGatesCont
-from gym_pybullet_drones.utils.utils import sync, str2bool
-from gym_pybullet_drones.utils.enums import ObservationType, ActionType
+from envs.MultiGates_SelfPlay_v2 import MultiGates_v2
+from utils.utils import sync, str2bool
+from utils.enums import ObservationType, ActionType
 
 DEFAULT_GUI = False
 DEFAULT_RECORD_VIDEO = False
 DEFAULT_OUTPUT_FOLDER = 'results'
 
 DEFAULT_OBS = ObservationType('kin') # 'kin' or 'rgb'
-DEFAULT_ACT = ActionType('vel') # 'rpm' or 'pid' or 'vel' or 'one_d_rpm' or 'one_d_pid'
+DEFAULT_ACT = ActionType('pos') # 'rpm' or 'pid' or 'vel' or 'one_d_rpm' or 'one_d_pid'
 ALGO = PPO
-DISCRETE_ACTION = True
-DUMB_NO_MODEL = False
-ENV_NAME = MultiGates_v1
+DISCRETE_ACTION = False
+ENV_NAME = MultiGates_v2
 N_ENVS = 4
-MAX_TIMESTEPS = 5000
-train_iter = 3
+MAX_TIMESTEPS = 8000
+EVAL_FREQ = int(8000)
+ITER = 1
+TRACK = 1
+NUM_DRONES = 4
+NUM_DUMB_DRONES = 0
+
 
 
 def get_unique_filename(base_filename):
@@ -72,27 +62,23 @@ def run(output_folder=DEFAULT_OUTPUT_FOLDER, gui=DEFAULT_GUI, record_video=DEFAU
     reset_num_timesteps, tb_log_name, progress_bar = True, ALGO.__name__, False
 
     iteration, log_interval = 0, 100
-    eval_freq = int(5000)
 
     # policy_kwargs = dict(activation_fn=th.nn.ReLU, net_arch=dict(pi=[128, 128], vf=[128, 128]))
-    policy_kwargs = dict(net_arch=[128, 128])
+    policy_kwargs = dict(net_arch=[256, 256])
 
     current_date = datetime.now().strftime("%d%b")
 
-    NUM_DRONES = 2
-    NUM_DUMB_DRONES = 2
-    DRONE_COLLISION = True
-    total_timesteps = 9e7
+    
+    total_timesteps = 1e7
 
     algo_name = ALGO.__name__.lower()
     action_type = DEFAULT_ACT.value
     action_space = "discrete" if DISCRETE_ACTION else "continuous"
-    update = "no_update" if DUMB_NO_MODEL else "update"
-    base_filename = f"{current_date}_noselfplay_agent_{NUM_DRONES}_dumb_agent_{NUM_DUMB_DRONES}_{update}_collision_{DRONE_COLLISION}_{algo_name}_{action_type}_{action_space}_iter_"
     
+    base_filename = f"{current_date}_noselfplay_agent_{NUM_DRONES}_dumb_agent_{NUM_DUMB_DRONES}_track_{TRACK}_{algo_name}_{action_type}_{action_space}_iter_"
 
-    for train_it in range(train_iter):
-        filename = os.path.join(output_folder, base_filename + str(train_it))
+    for train_it in range(ITER):
+        filename = os.path.join(output_folder, algo_name, base_filename + str(train_it))
         filename = get_unique_filename(filename)
 
         load_folder = "" #os.path.join(output_folder, previous_load_folder + str(train_it))
@@ -103,22 +89,21 @@ def run(output_folder=DEFAULT_OUTPUT_FOLDER, gui=DEFAULT_GUI, record_video=DEFAU
 
     
         train_env = make_vec_env(ENV_NAME,
-                                env_kwargs=dict(num_drones=NUM_DRONES, num_dumb_drones=NUM_DUMB_DRONES, discrete_action=DISCRETE_ACTION, obs=DEFAULT_OBS,  act=DEFAULT_ACT, gui=gui, max_timesteps=MAX_TIMESTEPS, 
-                                                drone_collision=DRONE_COLLISION, dumb_no_model=DUMB_NO_MODEL),
-                                n_envs=N_ENVS,
-                                seed=0,
-                                monitor_dir=filename + "/train"
-                                )
+                                    env_kwargs=dict(num_drones=NUM_DRONES, num_dumb_drones=NUM_DUMB_DRONES, discrete_action=DISCRETE_ACTION, obs=DEFAULT_OBS,  act=DEFAULT_ACT, 
+                                                    gui=gui, max_timesteps=MAX_TIMESTEPS, track=TRACK),
+                                    n_envs=N_ENVS,
+                                    seed=0,
+                                    monitor_dir=filename + "/train"
+                                    )
         
-        # eval_env = make_vec_env(ENV_NAME,
-        #                         env_kwargs=dict(num_drones=NUM_DRONES, num_dumb_drones=NUM_DUMB_DRONES, discrete_action=DISCRETE_ACTION, obs=DEFAULT_OBS,  act=DEFAULT_ACT, gui=gui, max_timesteps=MAX_TIMESTEPS, dumb_no_model=DUMB_NO_MODEL),
-        #                         n_envs=N_ENVS,
-        #                         seed=0,
-        #                         monitor_dir=filename + "/eval"
-        #                         )
 
-        eval_env = Monitor(ENV_NAME(num_drones=NUM_DRONES, num_dumb_drones=NUM_DUMB_DRONES, discrete_action=DISCRETE_ACTION, obs=DEFAULT_OBS, act=DEFAULT_ACT, max_timesteps=MAX_TIMESTEPS, 
-                                    drone_collision=DRONE_COLLISION, dumb_no_model=DUMB_NO_MODEL), filename=filename + "/eval")
+
+        eval_env = Monitor(ENV_NAME(num_drones=NUM_DRONES, num_dumb_drones=NUM_DUMB_DRONES, discrete_action=DISCRETE_ACTION, obs=DEFAULT_OBS, act=DEFAULT_ACT, 
+                                        max_timesteps=MAX_TIMESTEPS, track=TRACK), 
+                                        filename=filename + "/eval"
+                                        )
+
+        opponent_model = False if NUM_DUMB_DRONES == 0 else True
 
         agent = ALGO('MlpPolicy',
                         train_env,
@@ -128,9 +113,9 @@ def run(output_folder=DEFAULT_OUTPUT_FOLDER, gui=DEFAULT_GUI, record_video=DEFAU
                         opponent_model=True)
         
         if os.path.exists(model_to_be_loaded):
-            loaded_model = ALGO.load(model_to_be_loaded)
-            # Set the mlp_extractor of the new model to the loaded mlp_extractor
-            agent.policy.mlp_extractor = loaded_model.policy.mlp_extractor
+            # loaded_model = ALGO.load(model_to_be_loaded)
+            agent = ALGO.load(model_to_be_loaded, env=train_env)
+            agent.tensorboard_log = filename + '/tb/'
             print(f"Loaded previous model from: {model_to_be_loaded}")
             
         
@@ -138,33 +123,64 @@ def run(output_folder=DEFAULT_OUTPUT_FOLDER, gui=DEFAULT_GUI, record_video=DEFAU
                                     verbose=1,
                                     best_model_save_path=filename+'/',
                                     log_path=filename+'/',
-                                    eval_freq=eval_freq,
+                                    eval_freq=EVAL_FREQ,
                                     deterministic=True,
                                     render=False,
-                                    opponent_model_update=True)
+                                    opponent_model_update=opponent_model)
     
         
-        total_timesteps, callback = agent._setup_learn(total_timesteps, eval_callback, reset_num_timesteps, tb_log_name, progress_bar,)
+        if algo_name == "ppo":
+            total_timesteps, callback = agent._setup_learn(total_timesteps, eval_callback, reset_num_timesteps, tb_log_name, progress_bar,)
 
-        callback.on_training_start(locals(), globals())
+            callback.on_training_start(locals(), globals())
 
-        while agent.num_timesteps < total_timesteps:
-            continue_training = agent.collect_rollouts(agent.env, callback, agent.rollout_buffer, n_rollout_steps=agent.n_steps)
+            while agent.num_timesteps < total_timesteps:
+                continue_training = agent.collect_rollouts(agent.env, callback, agent.rollout_buffer, n_rollout_steps=agent.n_steps)
 
-            if not continue_training:
-                break
+                if not continue_training:
+                    break
 
-            iteration += 1
-            agent._update_current_progress_remaining(agent.num_timesteps, total_timesteps)
+                iteration += 1
+                agent._update_current_progress_remaining(agent.num_timesteps, total_timesteps)
 
-            # Display training infos
-            if log_interval is not None and iteration % log_interval == 0:
-                assert agent.ep_info_buffer is not None
-                agent._dump_logs(iteration)
+                # Display training infos
+                if log_interval is not None and iteration % log_interval == 0:
+                    assert agent.ep_info_buffer is not None
+                    agent._dump_logs(iteration)
 
-            agent.train()
+                agent.train()
 
-        callback.on_training_end()
+            callback.on_training_end()
+
+        elif algo_name == "td3" or algo_name == "ddpg" or algo_name == "sac":
+
+            total_timesteps, callback = agent._setup_learn(total_timesteps,eval_callback,reset_num_timesteps,tb_log_name,progress_bar,)
+
+            callback.on_training_start(locals(), globals())
+
+            while agent.num_timesteps < total_timesteps:
+                rollout = agent.collect_rollouts(
+                    agent.env,
+                    train_freq=agent.train_freq,
+                    action_noise=agent.action_noise,
+                    callback=callback,
+                    learning_starts=agent.learning_starts,
+                    replay_buffer=agent.replay_buffer,
+                    log_interval=log_interval,
+                )
+
+                if not rollout.continue_training:
+                    break
+
+                if agent.num_timesteps > 0 and agent.num_timesteps > agent.learning_starts:
+                    # If no `gradient_steps` is specified,
+                    # do as many gradients steps as steps performed during the rollout
+                    gradient_steps = agent.gradient_steps if agent.gradient_steps >= 0 else rollout.episode_timesteps
+                    # Special case when the user passes `gradient_steps=0`
+                    if gradient_steps > 0:
+                        agent.train(batch_size=agent.batch_size, gradient_steps=gradient_steps)
+
+            callback.on_training_end()
 
     
 

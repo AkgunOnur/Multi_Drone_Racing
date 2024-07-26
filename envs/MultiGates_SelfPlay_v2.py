@@ -48,7 +48,8 @@ class MultiGates_v2(BaseDrone_SelfPlay):
                  act: ActionType=ActionType.RPM,
                  max_timesteps = 2000,
                  mode: str = "normal",
-                 track: int=0
+                 track: int=0,
+                 init_type: str="normal"
                  ):
         """Initialization of a generic single and multi-agent RL environment.
 
@@ -104,10 +105,11 @@ class MultiGates_v2(BaseDrone_SelfPlay):
         self.NUM_DUMB_DRONES = num_dumb_drones
         self.discrete_action = discrete_action
         self.mode = mode 
-        self.penalty_value = 0.25
+        self.penalty_value = 0.1
+        self.init_type = init_type
 
-        chn = 0.05
-        yaw_chn = 0.05
+        chn = 0.01
+        yaw_chn = 0.01
         # self.action_mapping = {
         #     0: [chn, 0, 0],
         #     1: [-chn, 0, 0],
@@ -155,7 +157,7 @@ class MultiGates_v2(BaseDrone_SelfPlay):
             ])
 
             self.gate_rpy = np.array([
-                [0, 0, 0],    
+                [0, 0, np.pi/4],    
                 [0, np.pi/6,  np.pi/2],    
                 [0, -np.pi/4,  np.pi],   
                 [0, -np.pi/8,  np.pi],      
@@ -243,8 +245,9 @@ class MultiGates_v2(BaseDrone_SelfPlay):
     ################################################################################        
     
     def actionSpace(self, seed=None):
-        act_lower_bound = np.array([[-0.1, -0.1, -0.1, -0.1] for i in range(self.NUM_DRONES)], dtype=np.float32)
-        act_upper_bound = np.array([[0.1, 0.1, 0.1, 0.1] for i in range(self.NUM_DRONES)], dtype=np.float32)
+        c = 0.02
+        act_lower_bound = np.array([[-c, -c, -c, -c] for i in range(self.NUM_DRONES)], dtype=np.float32)
+        act_upper_bound = np.array([[c, c, c, c] for i in range(self.NUM_DRONES)], dtype=np.float32)
         #act_lower_bound = np.array([[-0.75, -0.75, -0.75, -1.0] for i in range(self.NUM_DRONES)], dtype=np.float32)
         #act_upper_bound = np.array([[0.75, 0.75, 0.75, 1.0] for i in range(self.NUM_DRONES)], dtype=np.float32)
 
@@ -420,6 +423,8 @@ class MultiGates_v2(BaseDrone_SelfPlay):
                 generated_action[agent] = diff_array
 
                 v_unit_vector = target_pos / np.linalg.norm(target_pos)
+
+                # print ("self.SPEED_LIMIT * v_unit_vector: ", self.SPEED_LIMIT * v_unit_vector)
                 
                 rpm_k, _, _ = self.ctrl[agent].computeControl(control_timestep=self.CTRL_TIMESTEP,
                                                         cur_pos=state[0:3],
@@ -428,7 +433,7 @@ class MultiGates_v2(BaseDrone_SelfPlay):
                                                         cur_ang_vel=state[13:16],
                                                         target_pos=next_pos,
                                                         target_rpy=target_orient,
-                                                        # target_vel=self.SPEED_LIMIT * np.abs(target_pos[3]) * v_unit_vector # target the desired velocity vector
+                                                        # target_vel=self.SPEED_LIMIT * v_unit_vector # target the desired velocity vector
                                                         )
                 rpm[agent] = rpm_k
 
@@ -561,7 +566,6 @@ class MultiGates_v2(BaseDrone_SelfPlay):
                     distances.append(distance)
                     opponent_obs.append(observation)
                     
-
                 # Sort the distances and observations together based on distances
                 sorted_indices = np.argsort(distances)
                 sorted_distances = [distances[i] for i in sorted_indices]
@@ -718,10 +722,8 @@ class MultiGates_v2(BaseDrone_SelfPlay):
 
         original_init_pos = [0,0,0]
         self.GATE_IDS = []
-        # initial_xyzs = initialize_drones(self.all_agents, original_init_pos)
-        self.initial_positions = generate_initial_positions(self.all_agents, self.gate_positions, self.gate_rpy)
-
-        self.infos = {agent: {"lap_time": []} for agent in self.all_agents}
+    
+        self.infos = {agent: {"lap_time": [], "successful_flight": True} for agent in self.all_agents}
         self.n_completion = {agent: 0 for agent in self.all_agents}
         self.previous_lap_time = {agent: 0 for agent in self.all_agents}
 
@@ -741,27 +743,36 @@ class MultiGates_v2(BaseDrone_SelfPlay):
         self.timesteps = 0
         self.navigators = {agent: GateNavigator(self.gate_positions) for agent in self.all_agents}
 
-        for agent in self.all_agents:
-            init_position = self.initial_positions[agent]
-            distance_list = []
-            for index, gate in enumerate(self.gate_positions):
-                distance = np.linalg.norm(gate - init_position)
-                distance_list.append((distance, index))
+        if self.init_type == "simple":
+            self.initial_positions = initialize_drones(self.all_agents, original_init_pos)
 
-            # Sort the distance_list based on the distances
-            sorted_distances = sorted(distance_list, key=lambda x: x[0])
+        elif self.init_type == "normal":
+            self.initial_positions = generate_initial_positions(self.all_agents, self.gate_positions, self.gate_rpy)
 
-            # print ("sorted_distances: ", sorted_distances)
-            # Get the index of the closest gate
-            closest_gate_index = sorted_distances[0][1]
+            for agent in self.all_agents:
+                init_position = self.initial_positions[agent]
+                distance_list = []
+                for index, gate in enumerate(self.gate_positions):
+                    distance = np.linalg.norm(gate - init_position)
+                    distance_list.append((distance, index))
 
-            self.navigators[agent].current_gate_index =  closest_gate_index
+                # Sort the distance_list based on the distances
+                sorted_distances = sorted(distance_list, key=lambda x: x[0])
 
-            # Access the closest gate position
-            closest_gate_position = self.gate_positions[closest_gate_index]
+                # print ("sorted_distances: ", sorted_distances)
+                # Get the index of the closest gate
+                closest_gate_index = sorted_distances[0][1]
 
-            # Print or use the closest gate information as needed
-            # print(f"Drone {agent} Position:{init_position}: Closest Gate Index: {closest_gate_index}, Position: {closest_gate_position}")
+                self.navigators[agent].current_gate_index =  closest_gate_index
+
+                # Access the closest gate position
+                closest_gate_position = self.gate_positions[closest_gate_index]
+
+                # Print or use the closest gate information as needed
+                # print(f"Drone {agent} Position:{init_position}: Closest Gate Index: {closest_gate_index}, Position: {closest_gate_position}")
+
+        else:
+            exit("Wrong initialization definition!")
 
 
         p.resetSimulation(physicsClientId=self.CLIENT)
@@ -1029,9 +1040,9 @@ class MultiGates_v2(BaseDrone_SelfPlay):
         done = False
 
         # Calculate team reward before updating individual completions
-        team_reward = self._computeTeamReward(self.agents)
-        for agent in self.agents:
-            reward[agent] += team_reward
+        # team_reward = self._computeTeamReward(self.agents)
+        # for agent in self.agents:
+        #     reward[agent] += team_reward
 
         for agent in self.all_agents:
             is_agent = agent in self.agents
@@ -1041,18 +1052,24 @@ class MultiGates_v2(BaseDrone_SelfPlay):
 
             if self._computeDroneFailed(agent):
                 current_reward[agent] = -1.0
+                self.infos[agent]["successful_flight"] = False
                 if is_agent:
                     terminated[agent] = True
             else:
                 if self.n_completion[agent] < navigator.completed_laps:
                     completion_lap_time = self.timesteps - self.previous_lap_time[agent]
-                    current_reward[agent] += 3000 / completion_lap_time
+                    reward_value = 100 / completion_lap_time
+                    current_reward[agent] += reward_value
+                    # print (f"drone {agent} completed the track. Reward: {reward_value:.4f}")
                     self.n_completion[agent] = navigator.completed_laps
                     self.previous_lap_time[agent] = self.timesteps
                     self.infos[agent]["lap_time"].append(completion_lap_time / self.PYB_FREQ)
                 elif gate_index > self.prev_gate_index[agent]:
-                    current_reward[agent] += 0.5
+                    # print (f"drone {agent} reached the gate {self.prev_gate_index[agent]}")
+                    current_reward[agent] += 2.5
                     self.prev_gate_index[agent] = gate_index
+
+                    
                 
                 reward_val = self._computeReward(drone_name=agent)
                 current_reward[agent] += reward_val
@@ -1070,6 +1087,7 @@ class MultiGates_v2(BaseDrone_SelfPlay):
             if all(terminated.values()):
                 done = True
 
+        # time.sleep(0.01)
 
         # print (f"drone_pos: {drone_pos[0]:.3f} {drone_pos[1]:.3f} {drone_pos[2]:.3f}")
         # print ("gate_index: ", gate_index, " position: ", self.gate_positions[gate_index])
@@ -1123,7 +1141,7 @@ def initialize_drones(all_agents, original_init_pos, margin=0.5, altitude=1.0, m
     return drone_positions
 
 
-def generate_initial_positions(all_agents, gate_positions, gate_rpy, track_width=2.0, margin=0.5):
+def generate_initial_positions(all_agents, gate_positions, gate_rpy, track_width=0.5, margin=0.5):
     drone_positions = {}
 
     for i, agent in enumerate(all_agents):

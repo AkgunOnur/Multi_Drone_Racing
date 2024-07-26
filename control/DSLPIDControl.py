@@ -34,20 +34,20 @@ class DSLPIDControl(BaseControl):
         if self.DRONE_MODEL != DroneModel.CF2X and self.DRONE_MODEL != DroneModel.CF2P:
             print("[ERROR] in DSLPIDControl.__init__(), DSLPIDControl requires DroneModel.CF2X or DroneModel.CF2P")
             exit()
-        self.P_COEFF_FOR = np.array([.35, .35, 0.9])
-        # self.P_COEFF_FOR = np.array([.2, .2, 0.6])
-        self.I_COEFF_FOR = np.array([.05, .05, .05])
-        self.D_COEFF_FOR = np.array([.2, .2, .5])
+        self.P_COEFF_FOR = np.array([.35, .35, .9])
+        # self.P_COEFF_FOR = np.array([.2, .2, .2])
+        self.I_COEFF_FOR = np.array([.025, .025, .025])
+        self.D_COEFF_FOR = np.array([.3, .3, .6])
         # self.D_COEFF_FOR = np.array([.3, .3, .7])
         self.P_COEFF_TOR = np.array([70000., 70000., 60000.])
         # self.P_COEFF_TOR = np.array([80000., 80000., 70000.])
-        self.I_COEFF_TOR = np.array([.0, .0, 500.])
+        self.I_COEFF_TOR = np.array([200.0, 200.0, 200.0])
         # self.D_COEFF_TOR = np.array([20000., 20000., 12000.])
         self.D_COEFF_TOR = np.array([20000., 20000., 12000.])
         self.PWM2RPM_SCALE = 0.2685
         self.PWM2RPM_CONST = 4070.3
         self.MIN_PWM = 20000
-        self.MAX_PWM = 65535
+        self.MAX_PWM = 100000#65535
         if self.DRONE_MODEL == DroneModel.CF2X:
             self.MIXER_MATRIX = np.array([ 
                                     [-.5, -.5, -1],

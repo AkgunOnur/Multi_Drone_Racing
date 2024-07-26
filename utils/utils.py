@@ -56,6 +56,7 @@ class GateNavigator:
             # Check if the drone has reached the current gate
             if distance_to_gate < self.threshold and dot_product < self.dot_threshold:
                 self.reached_gate = True
+                # print (f"distance: {distance_to_gate:.4f} dot: {dot_product:.4f}")
         
         # Update the previous position for the next iteration
         self.previous_position = drone_position
