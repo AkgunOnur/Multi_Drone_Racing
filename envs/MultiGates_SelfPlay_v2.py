@@ -253,12 +253,14 @@ class MultiGates_v2(BaseDrone_SelfPlay):
 
         if self.discrete_action:
             return spaces.MultiDiscrete([self.action_size] * self.NUM_DRONES)
-        else:    
-            # if self.ACT_TYPE == ActionType.RPM:
-            #     act_lower_bound = np.array([[0., 0., 0., 0.] for i in range(self.NUM_DRONES)], dtype=np.float32)
-            #     act_upper_bound = np.array([[0.25, 0.25, 0.25, 0.25] for i in range(self.NUM_DRONES)], dtype=np.float32)
-
-            return spaces.Box(low=act_lower_bound, high=act_upper_bound, dtype=np.float32)
+        else:   
+            if self.mode == "difficult":
+                c = 1.0
+                act_lower_bound = np.array([[-c, -c, -c] for i in range(self.NUM_DRONES)], dtype=np.float32)
+                act_upper_bound = np.array([[c, c, c] for i in range(self.NUM_DRONES)], dtype=np.float32)
+                return spaces.Box(low=act_lower_bound, high=act_upper_bound, dtype=np.float32)
+            else:
+                return spaces.Box(low=act_lower_bound, high=act_upper_bound, dtype=np.float32)
 
     def _observationSpace(self, agent=None):
         """Returns the observation space of the environment.
@@ -393,6 +395,8 @@ class MultiGates_v2(BaseDrone_SelfPlay):
                     if self.mode == "normal":
                         target_pos = gate_pos[:3] + self.action_mapping[action_k][:3]
                         target_orient[2]  += self.action_mapping[action_k][3]
+                    elif self.mode == "difficult":
+                        target_pos = drone_pos + self.action_mapping[action_k][:3]
                     elif self.mode == "planner":
                         target_pos = gate_pos
                     else:
@@ -401,12 +405,16 @@ class MultiGates_v2(BaseDrone_SelfPlay):
                     if self.mode == "normal":
                         target_pos = gate_pos + action_k[0:3]
                         target_orient[2] += action_k[3]
+                    elif self.mode == "difficult":
+                        target_pos = drone_pos + action_k
+                        
                     elif self.mode == "planner":
                         target_pos = gate_pos
                     else:
                         exit("error")
 
-
+                self.current_action = np.array(target_pos)
+                self.expert_action = np.array(gate_pos)
 
                 self.action_buffer[agent].append(target_pos)
 
@@ -722,6 +730,8 @@ class MultiGates_v2(BaseDrone_SelfPlay):
 
         original_init_pos = [0,0,0]
         self.GATE_IDS = []
+        self.current_action = []
+        self.expert_action = []
     
         self.infos = {agent: {"lap_time": [], "successful_flight": True} for agent in self.all_agents}
         self.n_completion = {agent: 0 for agent in self.all_agents}
@@ -1073,6 +1083,13 @@ class MultiGates_v2(BaseDrone_SelfPlay):
                 
                 reward_val = self._computeReward(drone_name=agent)
                 current_reward[agent] += reward_val
+
+                if self.mode == "difficult":
+                    # print ("self.expert_action: ", self.expert_action)
+                    # print ("self.current_action: ", self.current_action)
+                    action_diff = np.linalg.norm(self.expert_action - self.current_action)
+                    # print ("action_diff: ", action_diff)
+                    current_reward[agent] -= 0.1*action_diff
 
 
 

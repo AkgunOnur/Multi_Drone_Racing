@@ -41,11 +41,12 @@ DEFAULT_ACT = ActionType('pos') # 'rpm' or 'pid' or 'vel' or 'one_d_rpm' or 'one
 ALGO = PPO
 DISCRETE_ACTION = False
 ENV_NAME = MultiGates_v2
-N_ENVS = 4
-MAX_TIMESTEPS = 200
+N_ENVS = 8
+MAX_TIMESTEPS = 8000
 ITER = 1
-EVAL_FREQ = int(100)
+EVAL_FREQ = int(8000)
 TRACK = 1
+MODE = "difficult"
 
 
 def get_unique_filename(base_filename):
@@ -71,11 +72,11 @@ def run(output_folder=DEFAULT_OUTPUT_FOLDER, gui=DEFAULT_GUI, record_video=DEFAU
 
     N_drones = [2, 2, 2]
     N_dumb_drones = [0, 1, 2]
-    timesteps = [1e5, 1e6, 1e7]
+    timesteps = [1e7, 2e7, 3e7]
     # previous_load_folder = "23Jul_agent_2_dumb_agent_1_track_1_ppo_pos_discrete_iter_"
     previous_load_folder = ""
 
-    for train_index in range(2, len(N_drones)):
+    for train_index in range(0, len(N_drones)):
 
         NUM_DRONES = N_drones[train_index]
         NUM_DUMB_DRONES = N_dumb_drones[train_index]
@@ -85,7 +86,7 @@ def run(output_folder=DEFAULT_OUTPUT_FOLDER, gui=DEFAULT_GUI, record_video=DEFAU
         action_type = DEFAULT_ACT.value
         action_space = "discrete" if DISCRETE_ACTION else "continuous"
         # update = "no_update" if NO_MODEL else "update"
-        base_filename = f"{current_date}_agent_{NUM_DRONES}_dumb_agent_{NUM_DUMB_DRONES}_track_{TRACK}_{algo_name}_{action_type}_{action_space}_iter_"
+        base_filename = f"{current_date}_mode_{MODE}_agent_{NUM_DRONES}_dumb_agent_{NUM_DUMB_DRONES}_track_{TRACK}_{algo_name}_{action_type}_{action_space}_iter_"
         
 
         for train_it in range(ITER):
@@ -101,7 +102,7 @@ def run(output_folder=DEFAULT_OUTPUT_FOLDER, gui=DEFAULT_GUI, record_video=DEFAU
         
             train_env = make_vec_env(ENV_NAME,
                                     env_kwargs=dict(num_drones=NUM_DRONES, num_dumb_drones=NUM_DUMB_DRONES, discrete_action=DISCRETE_ACTION, obs=DEFAULT_OBS,  act=DEFAULT_ACT, 
-                                                    gui=gui, max_timesteps=MAX_TIMESTEPS, track=TRACK),
+                                                    gui=gui, max_timesteps=MAX_TIMESTEPS, track=TRACK, mode=MODE),
                                     n_envs=N_ENVS,
                                     seed=0,
                                     monitor_dir=filename + "/train"
@@ -115,7 +116,7 @@ def run(output_folder=DEFAULT_OUTPUT_FOLDER, gui=DEFAULT_GUI, record_video=DEFAU
             #                         )
 
             eval_env = Monitor(ENV_NAME(num_drones=NUM_DRONES, num_dumb_drones=NUM_DUMB_DRONES, discrete_action=DISCRETE_ACTION, obs=DEFAULT_OBS, act=DEFAULT_ACT, 
-                                        max_timesteps=MAX_TIMESTEPS, track=TRACK), 
+                                        max_timesteps=MAX_TIMESTEPS, track=TRACK, mode=MODE), 
                                         filename=filename + "/eval"
                                         )
 
